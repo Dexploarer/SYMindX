@@ -8,6 +8,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse'
 import type { Tool, Resource, Prompt } from '@modelcontextprotocol/sdk/types'
+import type { Writable, Readable } from 'node:stream'
+import type { Signals } from 'node:process'
 
 import { ExtensionConfig } from '../../types/common.js'
 
@@ -354,12 +356,13 @@ export interface SpawnOptions extends TerminalOptions {
   stdio?: 'pipe' | 'inherit' | 'ignore'
 }
 
+
 export interface TerminalProcess {
   pid: number
-  stdin: NodeJS.WritableStream | null
-  stdout: NodeJS.ReadableStream | null
-  stderr: NodeJS.ReadableStream | null
-  kill(signal?: NodeJS.Signals): boolean
+  stdin: Writable | null
+  stdout: Readable | null
+  stderr: Readable | null
+  kill(signal?: Signals): boolean
   wait(): Promise<number | null>
 }
 
