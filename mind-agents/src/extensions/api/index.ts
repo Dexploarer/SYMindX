@@ -226,33 +226,131 @@ export class ApiExtension implements Extension {
   }
 
   private async processChatMessage(request: ChatRequest): Promise<ChatResponse> {
-    // Implement chat message processing
-    return {
-      response: 'Chat processing not implemented yet',
-      timestamp: new Date().toISOString()
+    if (!this.agent) {
+      return {
+        response: 'Agent not initialized',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    if (!this.agent.portal) {
+      return {
+        response: 'No portal configured for agent',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    const messages = [{ role: 'user', content: request.message }]
+
+    const start = Date.now()
+    try {
+      const result = await this.agent.portal.generateChat(messages as any, {
+        maxTokens: request.options?.maxTokens
+      })
+
+      return {
+        response: result.message.content,
+        sessionId: request.context?.sessionId,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          tokensUsed: result.usage?.totalTokens,
+          processingTime: Date.now() - start
+        }
+      }
+    } catch (error) {
+      console.error('Chat processing error:', error)
+      return {
+        response: 'Failed to process chat',
+        sessionId: request.context?.sessionId,
+        timestamp: new Date().toISOString(),
+        metadata: { processingTime: Date.now() - start }
+      }
     }
   }
 
   private async getMemories(): Promise<any[]> {
-    // Implement memory retrieval
-    return []
+    if (!this.agent) return []
+
+    try {
+      return await this.agent.memory.retrieve(this.agent.id, 'recent', 20)
+    } catch (error) {
+      console.error('Memory retrieval error:', error)
+      return []
+    }
   }
 
   private async storeMemory(request: MemoryRequest): Promise<MemoryResponse> {
-    // Implement memory storage
-    return {
-      success: true,
-      id: 'memory-' + Date.now(),
-      timestamp: new Date().toISOString()
+    if (!this.agent) {
+      return {
+        success: false,
+        id: '',
+        timestamp: new Date().toISOString(),
+        error: 'Agent not initialized'
+      }
+    }
+
+    const memory = {
+      id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      agentId: this.agent.id,
+      type: (request.type as any) || 'experience',
+      content: request.content,
+      metadata: request.metadata || {},
+      importance: 0.5,
+      timestamp: new Date(),
+      tags: [],
+      duration: 'long_term'
+    }
+
+    try {
+      await this.agent.memory.store(this.agent.id, memory as any)
+      return {
+        success: true,
+        id: memory.id,
+        timestamp: memory.timestamp.toISOString()
+      }
+    } catch (error) {
+      console.error('Memory storage error:', error)
+      return {
+        success: false,
+        id: memory.id,
+        timestamp: memory.timestamp.toISOString(),
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
   }
 
   private async executeAction(request: ActionRequest): Promise<ActionResponse> {
-    // Implement action execution
+    if (!this.agent) {
+      return { success: false, executionTime: 0, error: 'Agent not initialized' }
+    }
+
+    const start = Date.now()
+
+    for (const ext of this.agent.extensions) {
+      const action = ext.actions[request.action]
+      if (action) {
+        try {
+          const res = await action.execute(this.agent, request.parameters || {})
+          return {
+            success: res.success,
+            result: res.result,
+            error: res.error,
+            executionTime: Date.now() - start
+          }
+        } catch (err) {
+          return {
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+            executionTime: Date.now() - start
+          }
+        }
+      }
+    }
+
     return {
-      success: true,
-      result: 'Action execution not implemented yet',
-      executionTime: 0
+      success: false,
+      error: `Action '${request.action}' not found`,
+      executionTime: Date.now() - start
     }
   }
 
