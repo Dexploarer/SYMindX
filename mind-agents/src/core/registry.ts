@@ -92,6 +92,18 @@ export class SYMindXModuleRegistry implements ModuleRegistry {
     return Array.from(this.portals.keys())
   }
 
+  listMemoryProviders(): string[] {
+    return Array.from(this.memoryProviders.keys())
+  }
+
+  listEmotionModules(): string[] {
+    return Array.from(this.emotionModules.keys())
+  }
+
+  listCognitionModules(): string[] {
+    return Array.from(this.cognitionModules.keys())
+  }
+
   // Tool system methods
   registerToolSystem(name: string, toolSystem: ToolSystem): void {
     if (!name || !toolSystem) {

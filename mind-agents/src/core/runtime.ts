@@ -902,9 +902,25 @@ export class SYMindXRuntime implements AgentRuntime {
   }
 
   /**
-   * Get comprehensive runtime capabilities and module information
+   * Get comprehensive runtime status information
    */
-  getRuntimeCapabilities() {
+  async getStatus() {
+    const fs = await import('fs/promises')
+    const path = await import('path')
+
+    // Resolve package.json path to read runtime version
+    const __dirname = path.dirname(new URL(import.meta.url).pathname)
+    const packagePath = path.resolve(__dirname, '../../package.json')
+    let version = 'unknown'
+    try {
+      const pkg = JSON.parse(await fs.readFile(packagePath, 'utf-8'))
+      version = pkg.version || version
+    } catch {
+      // ignore errors and keep default version
+    }
+
+    const availablePlugins = (await this.getAvailablePlugins()).map(p => p.id)
+
     return {
       agents: {
         count: this.agents.size,
@@ -920,23 +936,23 @@ export class SYMindXRuntime implements AgentRuntime {
           factorySupported: true
         },
         memory: {
-          available: ['memory', 'sqlite'], // TODO: make this dynamic
+          available: this.registry.listMemoryProviders(),
           factorySupported: false
         },
         portals: {
           available: this.registry.listPortals(),
-          factories: this.registry.listPortalFactories(),
+          factories: this.registry.listPortalFactories?.() || [],
           factorySupported: true
         }
       },
       extensions: {
         loaded: this.getLoadedPlugins().map(p => p.manifest.id),
-        available: [] // TODO: get from plugin discovery
+        available: availablePlugins
       },
       runtime: {
         isRunning: this.isRunning,
         tickInterval: this.config.tickInterval,
-        version: '1.0.0' // TODO: get from package.json
+        version
       }
     }
   }

@@ -488,6 +488,10 @@ export interface ModuleRegistry {
   getCognitionModule(name: string): CognitionModule | undefined
   getExtension(name: string): Extension | undefined
   getPortal(name: string): Portal | undefined
+  listMemoryProviders(): string[]
+  listEmotionModules(): string[]
+  listCognitionModules(): string[]
+  listPortals(): string[]
 }
 
 export enum LogLevel {
