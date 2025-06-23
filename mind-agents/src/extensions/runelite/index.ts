@@ -16,7 +16,7 @@ export class RuneLiteExtension implements Extension {
   
   private ws?: WebSocket
   private eventEmitter = new EventEmitter()
-  private skills: any
+  private skills: Record<string, any>
   private gameState: GameState = {
     player: {
       name: '',
@@ -560,7 +560,7 @@ export class RuneLiteExtension implements Extension {
   }
 
   // Utility methods
-  getGameState(): GameState {
+  async getGameState(): Promise<GameState> {
     return { ...this.gameState }
   }
 
