@@ -6,6 +6,7 @@
 
 import { Logger } from '../utils/logger.js'
 import { PluginManifest } from './plugin-config.js'
+import { NodeVM } from 'vm2'
 
 /**
  * Security context for plugin execution
@@ -237,15 +238,32 @@ export class SandboxEnvironment {
       throw new Error('Sandbox not initialized')
     }
 
-    // In a real implementation, this would use a proper sandbox like vm2 or isolated-vm
-    // For now, this is a placeholder that validates permissions
-    
+    // Validate the code prior to running
     this.validateExecution(code)
-    
-    // TODO: Implement actual sandboxed execution
+
     this.logger.debug(`Executing code in sandbox for plugin: ${this.pluginId}`)
-    
-    return null
+
+    try {
+      const vm = new NodeVM({
+        console: 'off',
+        sandbox: { ...globals },
+        eval: false,
+        wasm: false,
+        require: false
+      })
+
+      const result = vm.run(`(async () => { ${code}\n })()`, {
+        timeout: this.context.restrictions.maxCpu || 1000
+      })
+
+      return await Promise.resolve(result)
+    } catch (error) {
+      this.logger.error(
+        `Error executing code in sandbox for plugin: ${this.pluginId}`,
+        error
+      )
+      throw error
+    }
   }
 
   /**
