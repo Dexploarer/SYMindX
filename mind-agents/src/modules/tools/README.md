@@ -69,7 +69,7 @@ const codeExecutor = new SYMindXCodeExecutor({
 }, terminal);
 
 // Register common tools
-const commonTools = createCommonToolSpecs();
+const commonTools = createCommonToolSpecs(toolSystem);
 commonTools.forEach(tool => toolSystem.createTool(tool));
 
 // Execute code
