@@ -44,6 +44,14 @@ export class SYMindXRuntime implements AgentRuntime {
   public config: RuntimeConfig
   private tickTimer?: NodeJS.Timeout
   private isRunning = false
+  private isPaused = false
+  private metrics = {
+    tickCount: 0,
+    eventsProcessed: 0,
+    averageTickDuration: 0,
+    lastTickDuration: 0
+  }
+  private version = '0.0.0'
 
   constructor(config: RuntimeConfig) {
     this.config = config
@@ -83,6 +91,7 @@ export class SYMindXRuntime implements AgentRuntime {
       const __dirname = path.dirname(new URL(import.meta.url).pathname)
       const rootDir = path.resolve(__dirname, '../../..')
       const configPath = path.join(rootDir, 'config', 'runtime.json')
+      const pkgPath = path.join(rootDir, 'mind-agents', 'package.json')
       
       // Check if the config file exists
       try {
@@ -117,6 +126,11 @@ export class SYMindXRuntime implements AgentRuntime {
         }
         
         console.log('✅ Configuration loaded successfully')
+        try {
+          const pkgData = await fs.readFile(pkgPath, 'utf-8')
+          const pkg = JSON.parse(pkgData)
+          this.version = pkg.version || this.version
+        } catch {}
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
           console.log('⚠️ No runtime.json found, using default configuration')
@@ -178,10 +192,11 @@ export class SYMindXRuntime implements AgentRuntime {
 
   async stop(): Promise<void> {
     if (!this.isRunning) return
-    
+
     console.log('🛑 Stopping SYMindX Runtime...')
     this.isRunning = false
-    
+    this.isPaused = false
+
     if (this.tickTimer) {
       clearInterval(this.tickTimer)
       this.tickTimer = undefined
@@ -193,6 +208,34 @@ export class SYMindXRuntime implements AgentRuntime {
     }
     
     console.log('✅ SYMindX Runtime stopped')
+  }
+
+  pause(): void {
+    if (this.isPaused || !this.isRunning) return
+    this.isPaused = true
+    this.eventBus.publish({
+      id: `event_${Date.now()}`,
+      type: 'runtime_paused',
+      source: 'runtime',
+      data: {},
+      timestamp: new Date(),
+      processed: false
+    })
+    console.log('⏸️ SYMindX Runtime paused')
+  }
+
+  resume(): void {
+    if (!this.isPaused || !this.isRunning) return
+    this.isPaused = false
+    this.eventBus.publish({
+      id: `event_${Date.now()}`,
+      type: 'runtime_resumed',
+      source: 'runtime',
+      data: {},
+      timestamp: new Date(),
+      processed: false
+    })
+    console.log('▶️ SYMindX Runtime resumed')
   }
 
   async loadAgents(): Promise<void> {
@@ -414,21 +457,31 @@ export class SYMindXRuntime implements AgentRuntime {
   }
 
   async tick(): Promise<void> {
-    if (!this.isRunning) return
-    
+    if (!this.isRunning || this.isPaused) return
+
     const startTime = Date.now()
-    
+    let processed = 0
+
     // Process each agent
     for (const agent of this.agents.values()) {
       try {
+        const events = this.getUnprocessedEvents(agent.id)
+        processed += events.length
         await this.processAgent(agent)
       } catch (error) {
         console.error(`❌ Error processing agent ${agent.name}:`, error)
         agent.status = AgentStatus.ERROR
       }
     }
-    
+
     const duration = Date.now() - startTime
+    this.metrics.lastTickDuration = duration
+    this.metrics.tickCount++
+    this.metrics.eventsProcessed += processed
+    this.metrics.averageTickDuration =
+      (this.metrics.averageTickDuration * (this.metrics.tickCount - 1) + duration) /
+      this.metrics.tickCount
+
     if (duration > this.config.tickInterval * 0.8) {
       console.warn(`⚠️ Tick took ${duration}ms (${this.config.tickInterval}ms interval)`)
     }
@@ -775,10 +828,20 @@ export class SYMindXRuntime implements AgentRuntime {
     return {
       agents: this.agents.size,
       isRunning: this.isRunning,
+      isPaused: this.isPaused,
       plugins: this.pluginLoader.getStats(),
-      eventBus: this.eventBus instanceof SYMindXEnhancedEventBus ? 
-               (this.eventBus as any).getMetrics?.() : null
+      eventBus: this.eventBus instanceof SYMindXEnhancedEventBus ?
+               (this.eventBus as any).getMetrics?.() : null,
+      runtime: { ...this.metrics }
     }
+  }
+
+  getMetrics() {
+    return { ...this.metrics }
+  }
+
+  resetMetrics(): void {
+    this.metrics = { tickCount: 0, eventsProcessed: 0, averageTickDuration: 0, lastTickDuration: 0 }
   }
 
   /**
@@ -904,7 +967,7 @@ export class SYMindXRuntime implements AgentRuntime {
   /**
    * Get comprehensive runtime capabilities and module information
    */
-  getRuntimeCapabilities() {
+  async getRuntimeCapabilities() {
     return {
       agents: {
         count: this.agents.size,
@@ -920,8 +983,8 @@ export class SYMindXRuntime implements AgentRuntime {
           factorySupported: true
         },
         memory: {
-          available: ['memory', 'sqlite'], // TODO: make this dynamic
-          factorySupported: false
+          available: this.registry.listMemoryProviders(),
+          factorySupported: true
         },
         portals: {
           available: this.registry.listPortals(),
@@ -931,12 +994,13 @@ export class SYMindXRuntime implements AgentRuntime {
       },
       extensions: {
         loaded: this.getLoadedPlugins().map(p => p.manifest.id),
-        available: [] // TODO: get from plugin discovery
+        available: (await this.pluginLoader.getAvailablePlugins()).map(m => m.name)
       },
       runtime: {
         isRunning: this.isRunning,
         tickInterval: this.config.tickInterval,
-        version: '1.0.0' // TODO: get from package.json
+        version: this.version,
+        paused: this.isPaused
       }
     }
   }

@@ -483,11 +483,19 @@ export interface ModuleRegistry {
   registerCognitionModule(name: string, module: CognitionModule): void
   registerExtension(name: string, extension: Extension): void
   registerPortal(name: string, portal: Portal): void
+  registerPortalFactory(name: string, factory: (config: PortalConfig) => Portal): void
+  createPortal(name: string, config: PortalConfig): Portal | undefined
   getMemoryProvider(name: string): MemoryProvider | undefined
   getEmotionModule(name: string): EmotionModule | undefined
   getCognitionModule(name: string): CognitionModule | undefined
   getExtension(name: string): Extension | undefined
   getPortal(name: string): Portal | undefined
+  listMemoryProviders(): string[]
+  listEmotionModules(): string[]
+  listCognitionModules(): string[]
+  listExtensions(): string[]
+  listPortals(): string[]
+  listPortalFactories?(): string[]
 }
 
 export enum LogLevel {

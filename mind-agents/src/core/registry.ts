@@ -4,13 +4,13 @@
  * Central registry for managing all module types in the SYMindX runtime.
  */
 
-import { 
-  ModuleRegistry, 
-  MemoryProvider, 
+import {
+  ModuleRegistry,
+  MemoryProvider,
   Extension,
   Agent
 } from '../types/agent.js'
-import { Portal } from '../types/portal.js'
+import { Portal, PortalConfig } from '../types/portal.js'
 import { EmotionModule } from '../types/emotion.js'
 import { CognitionModule } from '../types/cognition.js'
 
@@ -39,6 +39,7 @@ export class SYMindXModuleRegistry implements ModuleRegistry {
   private cognitionModules = new Map<string, CognitionModule>()
   private extensions = new Map<string, Extension>()
   private portals = new Map<string, Portal>()
+  private portalFactories = new Map<string, (config: PortalConfig) => Portal>()
   private toolSystems = new Map<string, ToolSystem>()
   private observabilityModules = new Map<string, ObservabilityModule>()
   private streamingInterfaces = new Map<string, StreamingInterface>()
@@ -68,6 +69,16 @@ export class SYMindXModuleRegistry implements ModuleRegistry {
     console.log(`🔮 Registered portal: ${name}`)
   }
 
+  registerPortalFactory(name: string, factory: (config: PortalConfig) => Portal): void {
+    this.portalFactories.set(name, factory)
+    console.log(`🏭 Registered portal factory: ${name}`)
+  }
+
+  createPortal(name: string, config: PortalConfig): Portal | undefined {
+    const factory = this.portalFactories.get(name)
+    return factory ? factory(config) : undefined
+  }
+
   getMemoryProvider(name: string): MemoryProvider | undefined {
     return this.memoryProviders.get(name)
   }
@@ -88,8 +99,28 @@ export class SYMindXModuleRegistry implements ModuleRegistry {
     return this.portals.get(name)
   }
 
+  listMemoryProviders(): string[] {
+    return Array.from(this.memoryProviders.keys())
+  }
+
+  listEmotionModules(): string[] {
+    return Array.from(this.emotionModules.keys())
+  }
+
+  listCognitionModules(): string[] {
+    return Array.from(this.cognitionModules.keys())
+  }
+
+  listExtensions(): string[] {
+    return Array.from(this.extensions.keys())
+  }
+
   listPortals(): string[] {
     return Array.from(this.portals.keys())
+  }
+
+  listPortalFactories(): string[] {
+    return Array.from(this.portalFactories.keys())
   }
 
   // Tool system methods
@@ -156,6 +187,7 @@ export class SYMindXModuleRegistry implements ModuleRegistry {
       cognitionModules: this.cognitionModules.size,
       extensions: this.extensions.size,
       portals: this.portals.size,
+      portalFactories: this.portalFactories.size,
       toolSystems: this.toolSystems.size,
       observabilityModules: this.observabilityModules.size,
       streamingInterfaces: this.streamingInterfaces.size
@@ -168,6 +200,7 @@ export class SYMindXModuleRegistry implements ModuleRegistry {
     this.cognitionModules.clear()
     this.extensions.clear()
     this.portals.clear()
+    this.portalFactories.clear()
     this.toolSystems.clear()
     this.observabilityModules.clear()
     this.streamingInterfaces.clear()
